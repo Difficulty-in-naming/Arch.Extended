@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -25,6 +26,10 @@ public class QueryGenerator : ISourceGenerator
     public void Initialize(GeneratorInitializationContext context)
     {
         _classToMethods = new(512);
+        /*if (!Debugger.IsAttached)
+        {
+            Debugger.Launch();
+        }*/
     }
 
     public void Execute(GeneratorExecutionContext context)
@@ -40,15 +45,14 @@ public class QueryGenerator : ISourceGenerator
             #endif
             }
         """;
-        context.AddSource("Attributes.g.cs", SourceText.From(attributes, Encoding.UTF8));
+        context.AddSource("Attributes.g.cs", CSharpSyntaxTree.ParseText(attributes).GetRoot().NormalizeWhitespace().ToFullString());
 
         var methodDeclarations = context.Compilation.SyntaxTrees
             .SelectMany(t => t.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(m => m.AttributeLists.Count > 0 &&
                         m.AttributeLists.SelectMany(a => a.Attributes)
-                            .Any(a => a.Name.ToString() == "QueryAttribute"))
+                            .Any(a => a.Name.ToString() is "QueryAttribute" or "Query"))
             .Distinct();
-
         foreach (var methodSyntax in methodDeclarations)
         {
             var semanticModel = context.Compilation.GetSemanticModel(methodSyntax.SyntaxTree);
@@ -56,25 +60,32 @@ public class QueryGenerator : ISourceGenerator
 
             AddMethodToClass(methodSymbol);
 
-            var entity = methodSymbol.Parameters.Any(symbol => symbol.Type.Name.Equals("Entity"));
+            bool entity = false;
+            if (methodSymbol.Parameters != null)
+            {
+                entity = methodSymbol.Parameters.Any(symbol => symbol.Type.Name.Equals("Entity"));
+            }
+
             var sb = new StringBuilder();
             var method = entity ? sb.AppendQueryWithEntity(methodSymbol) : sb.AppendQueryWithoutEntity(methodSymbol);
-            context.AddSource($"{methodSymbol.ContainingType.Name}.g.cs", SourceText.From(method.ToString(), Encoding.UTF8));
+            var x = methodSymbol.ToDisplayString();
+            context.AddSource($"{methodSymbol.ToDisplayString()}.g.cs", CSharpSyntaxTree.ParseText(method.ToString()).GetRoot().NormalizeWhitespace().ToFullString());
+        }
 
-            foreach (var classToMethod in _classToMethods)
-            {
+        foreach (var classToMethod in _classToMethods)
+        {
 
-                var classSymbol = classToMethod.Key as INamedTypeSymbol;
-                var parentSymbol = classSymbol.BaseType;
+            var classSymbol = classToMethod.Key as INamedTypeSymbol;
+            var parentSymbol = classSymbol.BaseType;
 
-                if (!parentSymbol.Name.Equals("BaseSystem")) continue;
-                if (classSymbol.MemberNames.Contains("Update")) continue;
+            if (!parentSymbol.Name.Equals("BaseSystem")) continue;
+            if (classSymbol.MemberNames.Contains("Update")) continue;
 
-                var typeSymbol = parentSymbol.TypeArguments[1];
+            var typeSymbol = parentSymbol.TypeArguments[1];
 
-                var methodCalls = new StringBuilder().CallMethods(classToMethod.Value);
-                var template =
-                    $$"""
+            var methodCalls = new StringBuilder().CallMethods(classToMethod.Value);
+            var template =
+                $$"""
             using System.Runtime.CompilerServices;
             using System.Runtime.InteropServices;
             using {{typeSymbol.ContainingNamespace}};
@@ -88,9 +99,8 @@ public class QueryGenerator : ISourceGenerator
                 }
             }
             """;
-
-                context.AddSource($"{classSymbol.Name}.g.cs", CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
-            }
+            var x2 = classSymbol.ToDisplayString();
+            context.AddSource($"{classSymbol.ToDisplayString()}.g.cs", CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
         }
     }
 }
