@@ -2,11 +2,10 @@
 using Arch.Core;
 using Arch.Core.Extensions;
 using Arch.System;
+using Arch.System.Sample;
 using Arch.System.SourceGenerator;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-
-namespace Arch.System.Sample;
 
 /// <summary>
 /// The movement system makes the entities move and bounce properly. 
@@ -97,7 +96,7 @@ public partial class DebugSystem : BaseSystem<World, GameTime>
     public override void Update(in GameTime t)
     {
         World.Query(in _customQuery, (in Entity entity) => Console.WriteLine($"Custom : {entity}"));  // Manual query
-        PrintEntitiesWithoutVelocityQuery(World);  // Call source generated query, which calls the PrintEntitiesWithoutVelocity method
+        //PrintEntitiesWithoutVelocityQuery(World);  // Call source generated query, which calls the PrintEntitiesWithoutVelocity method
     }
 
     [Query]

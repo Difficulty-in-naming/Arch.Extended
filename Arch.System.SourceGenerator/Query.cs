@@ -90,11 +90,14 @@ public static class QueryUtils
         {
             var data = new StringBuilder();
             data.Append(',');
-            foreach (var parameter in method.Parameters)
+            if(method.Parameters != null)
             {
-                if (!parameter.GetAttributes().Any(attributeData => attributeData.AttributeClass.Name.Contains("Data"))) continue;
-                data.Append($"{CommonUtils.RefKindToString(parameter.RefKind)} Data,");
-                break;
+                foreach (var parameter in method.Parameters)
+                {
+                    if (!parameter.GetAttributes().Any(attributeData => attributeData.AttributeClass.Name.Contains("Data"))) continue;
+                    data.Append($"{CommonUtils.RefKindToString(parameter.RefKind)} Data,");
+                    break;
+                }
             }
             data.Length--;
             sb.AppendLine($"{method.Name}Query(World {data});");   
@@ -127,9 +130,13 @@ public static class QueryUtils
         var anyAttributeSymbol = methodSymbol.GetAttributeData("Any");
         var noneAttributeSymbol = methodSymbol.GetAttributeData("None");
         var exclusiveAttributeSymbol = methodSymbol.GetAttributeData("Exclusive");
-        
+
         // Get params / components except those marked with data or entities. 
-        var components = methodSymbol.Parameters.ToList();
+        List<IParameterSymbol> components = new List<IParameterSymbol>();
+        if (methodSymbol.Parameters != null)
+        {
+            components.AddRange(methodSymbol.Parameters.ToList());
+        }
         components.RemoveAll(symbol => symbol.Type.Name.Equals("Entity"));                                                // Remove entitys 
         components.RemoveAll(symbol => symbol.GetAttributes().Any(data => data.AttributeClass.Name.Contains("Data")));    // Remove data annotated params
         
@@ -157,11 +164,17 @@ public static class QueryUtils
         exclusiveArray.RemoveAll(symbol => symbol.Name.Equals("Entity"));
 
         // Generate code
-        var data = new StringBuilder().DataParameters(methodSymbol.Parameters);
+        StringBuilder data = new StringBuilder();
+        StringBuilder insertParams = new StringBuilder();
+
+        if (methodSymbol.Parameters != null)
+        {
+            data.DataParameters(methodSymbol.Parameters);
+            insertParams.InsertParams(methodSymbol.Parameters);
+        }
         var getArrays = new StringBuilder().GetArrays(components);
         var getFirstElements = new StringBuilder().GetFirstElements(components);
         var getComponents = new StringBuilder().GetComponents(components);
-        var insertParams = new StringBuilder().InsertParams(methodSymbol.Parameters);
         
         var allTypeArray = new StringBuilder().GetTypeArray(allArray);
         var anyTypeArray = new StringBuilder().GetTypeArray(anyArray);
@@ -178,7 +191,7 @@ public static class QueryUtils
             using Arch.Core.Utils;
             using ArrayExtensions = CommunityToolkit.HighPerformance.ArrayExtensions;
             using Component = Arch.Core.Utils.Component;
-            namespace {{methodSymbol.ContainingNamespace}}{
+            {{(!methodSymbol.ContainingNamespace.IsGlobalNamespace ? $"namespace {methodSymbol.ContainingNamespace} {{" : "")}}
                 public {{staticModifier}} partial class {{methodSymbol.ContainingSymbol.Name}}{
                     
                     private {{staticModifier}} QueryDescription {{methodSymbol.Name}}_QueryDescription = new QueryDescription{
@@ -213,7 +226,7 @@ public static class QueryUtils
                         }
                     }
                 }
-            }
+            {{(!methodSymbol.ContainingNamespace.IsGlobalNamespace ? "}" : "")}}
             """;
         sb.Append(template);
         return sb;
@@ -228,9 +241,13 @@ public static class QueryUtils
         var anyAttributeSymbol = methodSymbol.GetAttribute("Any");
         var noneAttributeSymbol = methodSymbol.GetAttribute("None");
         var exclusiveAttributeSymbol = methodSymbol.GetAttribute("Exclusive");
-        
+
         // Get params / components except those marked with data or entities. 
-        var components = methodSymbol.Parameters.ToList();
+        List<IParameterSymbol> components = new List<IParameterSymbol>();
+        if(methodSymbol.Parameters != null)
+        {
+            components.AddRange(methodSymbol.Parameters.ToList());
+        }
         components.RemoveAll(symbol => symbol.Type.Name.Equals("Entity"));                                                // Remove entitys 
         components.RemoveAll(symbol => symbol.GetAttributes().Any(data => data.AttributeClass.Name.Contains("Data")));    // Remove data annotated params
         
@@ -239,13 +256,19 @@ public static class QueryUtils
         if(allAttributeSymbol is not null) allArray.AddRange(allAttributeSymbol.TypeArguments);
         allArray = allArray.Distinct().ToList();
         allArray.RemoveAll(symbol => symbol.Name.Equals("Entity"));  // Do not allow entities inside All
-        
+
         // Generate code 
-        var data = new StringBuilder().DataParameters(methodSymbol.Parameters);
+        StringBuilder data = new StringBuilder();
+        StringBuilder insertParams = new StringBuilder();
+
+        if (methodSymbol.Parameters != null)
+        {
+            data.DataParameters(methodSymbol.Parameters);
+            insertParams.InsertParams(methodSymbol.Parameters);
+        }
         var getArrays = new StringBuilder().GetArrays(components);
         var getFirstElements = new StringBuilder().GetFirstElements(components);
         var getComponents = new StringBuilder().GetComponents(components);
-        var insertParams = new StringBuilder().InsertParams(methodSymbol.Parameters);
         
         var allTypeArray = new StringBuilder().GetTypeArray(allArray);
         var anyTypeArray = new StringBuilder().GetTypeArray(anyAttributeSymbol);
@@ -262,7 +285,7 @@ public static class QueryUtils
             using Arch.Core.Utils;
             using ArrayExtensions = CommunityToolkit.HighPerformance.ArrayExtensions;
             using Component = Arch.Core.Utils.Component;
-            namespace {{methodSymbol.ContainingNamespace}}{
+            {{(!methodSymbol.ContainingNamespace.IsGlobalNamespace ? $"namespace {methodSymbol.ContainingNamespace} {{" : "")}}
                 public {{staticModifier}} partial class {{methodSymbol.ContainingSymbol.Name}}{
                     
                     private {{staticModifier}} QueryDescription {{methodSymbol.Name}}_QueryDescription = new QueryDescription{
@@ -299,7 +322,7 @@ public static class QueryUtils
                         }
                     }
                 }
-            }
+            {{(!methodSymbol.ContainingNamespace.IsGlobalNamespace ? "}" : "")}}
             """;
 
         sb.Append(template);

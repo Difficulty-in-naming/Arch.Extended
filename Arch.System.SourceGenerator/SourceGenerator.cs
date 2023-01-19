@@ -68,7 +68,6 @@ public class QueryGenerator : ISourceGenerator
 
             var sb = new StringBuilder();
             var method = entity ? sb.AppendQueryWithEntity(methodSymbol) : sb.AppendQueryWithoutEntity(methodSymbol);
-            var x = methodSymbol.ToDisplayString();
             context.AddSource($"{methodSymbol.ToDisplayString()}.g.cs", CSharpSyntaxTree.ParseText(method.ToString()).GetRoot().NormalizeWhitespace().ToFullString());
         }
 
@@ -89,7 +88,7 @@ public class QueryGenerator : ISourceGenerator
             using System.Runtime.CompilerServices;
             using System.Runtime.InteropServices;
             using {{typeSymbol.ContainingNamespace}};
-            namespace {{classSymbol.ContainingNamespace}}{
+            {{(classSymbol.ContainingNamespace != null ? $"namespace {classSymbol.ContainingNamespace} {{" : "")}}
                 public partial class {{classSymbol.Name}}{
                         
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -97,9 +96,8 @@ public class QueryGenerator : ISourceGenerator
                         {{methodCalls}}
                     }
                 }
-            }
+            {{(classSymbol.ContainingNamespace != null ? "}" : "")}}
             """;
-            var x2 = classSymbol.ToDisplayString();
             context.AddSource($"{classSymbol.ToDisplayString()}.g.cs", CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
         }
     }
