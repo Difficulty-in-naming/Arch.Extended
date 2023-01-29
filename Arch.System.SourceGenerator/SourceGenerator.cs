@@ -1,31 +1,18 @@
-﻿using System.Diagnostics;
-using System.Text;
+﻿using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
 
 namespace Arch.System.SourceGenerator;
 
-[Generator]
+[Generator(LanguageNames.CSharp)]
 public class QueryGenerator : ISourceGenerator
 {
-    private static Dictionary<ISymbol, List<IMethodSymbol>> _classToMethods { get; set; }
-
-    private static void AddMethodToClass(IMethodSymbol methodSymbol)
-    {
-        if (!_classToMethods.TryGetValue(methodSymbol.ContainingSymbol, out var list))
-        {
-            list = new List<IMethodSymbol>();
-            _classToMethods[methodSymbol.ContainingSymbol] = list;
-        }
-
-        list.Add(methodSymbol);
-    }
-
+    private static Logger mLogger;
     public void Initialize(GeneratorInitializationContext context)
     {
-        _classToMethods = new(512);
+        mLogger = new Logger();
+        context.RegisterForSyntaxNotifications(SyntaxContextReceiver.Create);
         /*if (!Debugger.IsAttached)
         {
             Debugger.Launch();
@@ -34,7 +21,15 @@ public class QueryGenerator : ISourceGenerator
 
     public void Execute(GeneratorExecutionContext context)
     {
-        var attributes = $$"""
+        File.WriteAllText("C:\\Dev\\Project\\Gitea\\Test.txt", "Test");
+        if (context.SyntaxContextReceiver is not SyntaxContextReceiver receiver || receiver.MethodDeclarations.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var attributes = $$"""
             namespace Arch.System.SourceGenerator
             {
             #if NET7_0_OR_GREATER
@@ -45,60 +40,108 @@ public class QueryGenerator : ISourceGenerator
             #endif
             }
         """;
-        context.AddSource("Attributes.g.cs", CSharpSyntaxTree.ParseText(attributes).GetRoot().NormalizeWhitespace().ToFullString());
-
-        var methodDeclarations = context.Compilation.SyntaxTrees
-            .SelectMany(t => t.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
-            .Where(m => m.AttributeLists.Count > 0 &&
-                        m.AttributeLists.SelectMany(a => a.Attributes)
-                            .Any(a => a.Name.ToString() is "QueryAttribute" or "Query"))
-            .Distinct();
-        foreach (var methodSyntax in methodDeclarations)
-        {
-            var semanticModel = context.Compilation.GetSemanticModel(methodSyntax.SyntaxTree);
-            var methodSymbol = ModelExtensions.GetDeclaredSymbol(semanticModel, methodSyntax) as IMethodSymbol;
-
-            AddMethodToClass(methodSymbol);
-
-            bool entity = false;
-            if (methodSymbol.Parameters != null)
+            context.AddSource("Attributes.g.cs", CSharpSyntaxTree.ParseText(attributes).GetRoot().NormalizeWhitespace().ToFullString());
+            foreach (var methodSyntax in receiver.MethodDeclarations)
             {
-                entity = methodSymbol.Parameters.Any(symbol => symbol.Type.Name.Equals("Entity"));
+                var semanticModel = context.Compilation.GetSemanticModel(methodSyntax.SyntaxTree);
+                var methodSymbol = ModelExtensions.GetDeclaredSymbol(semanticModel, methodSyntax) as IMethodSymbol;
+
+                bool entity = false;
+                if (methodSymbol?.Parameters != null)
+                {
+                    entity = methodSymbol.Parameters.Any(symbol => symbol.Type.Name.Equals("Entity"));
+                }
+
+                var sb = new StringBuilder();
+                if (methodSymbol != null)
+                {
+                    var method = entity ? sb.AppendQueryWithEntity(methodSymbol) : sb.AppendQueryWithoutEntity(methodSymbol);
+                    context.AddSource($"{methodSymbol.ToFullString()}.g.cs", CSharpSyntaxTree.ParseText(method.ToString()).GetRoot().NormalizeWhitespace().ToFullString());
+                }
             }
 
-            var sb = new StringBuilder();
-            var method = entity ? sb.AppendQueryWithEntity(methodSymbol) : sb.AppendQueryWithoutEntity(methodSymbol);
-            context.AddSource($"{methodSymbol.ToDisplayString()}.g.cs", CSharpSyntaxTree.ParseText(method.ToString()).GetRoot().NormalizeWhitespace().ToFullString());
-        }
+            foreach (var classToMethod in receiver.ClassDeclarations)
+            {
+                var classSymbol = classToMethod.Key;
+                var parentSymbol = classSymbol.BaseType;
 
-        foreach (var classToMethod in _classToMethods)
-        {
+                if (parentSymbol != null && !parentSymbol.Name.Equals("BaseSystem")) continue;
+                if (classSymbol.MemberNames.Contains("Update")) continue;
 
-            var classSymbol = classToMethod.Key as INamedTypeSymbol;
-            var parentSymbol = classSymbol.BaseType;
+                var typeSymbol = parentSymbol?.TypeArguments[1];
 
-            if (!parentSymbol.Name.Equals("BaseSystem")) continue;
-            if (classSymbol.MemberNames.Contains("Update")) continue;
+                var methodCalls = new StringBuilder().CallMethods(classToMethod.Value);
 
-            var typeSymbol = parentSymbol.TypeArguments[1];
-
-            var methodCalls = new StringBuilder().CallMethods(classToMethod.Value);
-            var template =
-                $$"""
+                var template =
+                    $$"""
             using System.Runtime.CompilerServices;
             using System.Runtime.InteropServices;
-            using {{typeSymbol.ContainingNamespace}};
-            {{(classSymbol.ContainingNamespace != null ? $"namespace {classSymbol.ContainingNamespace} {{" : "")}}
+            {{(!classSymbol.ContainingNamespace.IsGlobalNamespace ? $"namespace {classSymbol.ContainingNamespace} {{" : "")}}
                 public partial class {{classSymbol.Name}}{
                         
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                    public override void Update(in {{typeSymbol.Name}} {{typeSymbol.Name.ToLower()}}){
+                    public override void Update(in {{typeSymbol?.ToDisplayString()}} {{typeSymbol?.Name.ToLower()}}){
                         {{methodCalls}}
                     }
                 }
-            {{(classSymbol.ContainingNamespace != null ? "}" : "")}}
+            {{(!classSymbol.ContainingNamespace.IsGlobalNamespace ? "}" : "")}}
             """;
-            context.AddSource($"{classSymbol.ToDisplayString()}.g.cs", CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
+                context.AddSource($"{classSymbol.ToFullString()}.g.cs", CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
+            }
+        }
+        catch (Exception e)
+        {
+            mLogger.Log(e.ToString());
+        }
+        finally
+        {
+            mLogger.Save("./Debug.txt");
+        }
+    }
+    
+    class SyntaxContextReceiver : ISyntaxContextReceiver
+    {
+        internal static ISyntaxContextReceiver Create()
+        {
+            return new SyntaxContextReceiver();
+        }
+
+        public HashSet<MethodDeclarationSyntax> MethodDeclarations { get; } = new();
+        public Dictionary<INamedTypeSymbol,List<IMethodSymbol>> ClassDeclarations { get; } = new();
+
+        public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
+        {
+            var node = context.Node;
+            var list = new List<IMethodSymbol>();
+            if (node is ClassDeclarationSyntax
+                or StructDeclarationSyntax
+                or RecordDeclarationSyntax
+                or InterfaceDeclarationSyntax)
+            {
+                var allMethod = node.DescendantNodes().OfType<MethodDeclarationSyntax>();
+                list.Clear();
+                foreach (var method in allMethod)
+                {
+                    if (method.AttributeLists.Count > 0)
+                    {
+                        var attr = method.AttributeLists.SelectMany(x => x.Attributes)
+                            .FirstOrDefault(x => x.Name.ToString() is "Query");
+                        if (attr != null)
+                        {
+                            MethodDeclarations.Add(method);
+                            var methodSymbol = context.SemanticModel.GetDeclaredSymbol(method);
+                            if (methodSymbol != null)
+                                list.Add(methodSymbol);
+                        }
+                    }
+                }
+
+                if (list.Count > 0)
+                {
+                    if(context.SemanticModel.GetDeclaredSymbol(node) is INamedTypeSymbol named)
+                        ClassDeclarations.Add(named, list);
+                }
+            }
         }
     }
 }
