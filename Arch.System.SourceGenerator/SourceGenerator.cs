@@ -21,7 +21,6 @@ public class QueryGenerator : ISourceGenerator
 
     public void Execute(GeneratorExecutionContext context)
     {
-        File.WriteAllText("C:\\Dev\\Project\\Gitea\\Test.txt", "Test");
         if (context.SyntaxContextReceiver is not SyntaxContextReceiver receiver || receiver.MethodDeclarations.Count == 0)
         {
             return;
