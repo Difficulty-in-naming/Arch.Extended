@@ -79,7 +79,7 @@ public class QueryGenerator : ISourceGenerator
                 public partial class {{classSymbol.Name}}{
                         
                     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                    public override void Update(in {{typeSymbol?.ToDisplayString()}} {{typeSymbol?.Name.ToLower()}}){
+                    public override void Update(in {{typeSymbol?.ToDisplayString()}} data){
                         {{methodCalls}}
                     }
                 }

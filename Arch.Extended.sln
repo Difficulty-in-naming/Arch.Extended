@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arch.System.Sample", "Arch.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arch.System", "Arch.System\Arch.System.csproj", "{39363918-BFC7-43BF-8307-F5581225FB41}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arch.System.SourceGenerator.Tests", "Arch.System.SourceGenerator.Tests\Arch.System.SourceGenerator.Tests.csproj", "{D0D0BBFC-FD62-4D8A-8D35-AE3CF96B21AE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{39363918-BFC7-43BF-8307-F5581225FB41}.Release|Any CPU.Build.0 = Release|Any CPU
 		{39363918-BFC7-43BF-8307-F5581225FB41}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{39363918-BFC7-43BF-8307-F5581225FB41}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0D0BBFC-FD62-4D8A-8D35-AE3CF96B21AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0D0BBFC-FD62-4D8A-8D35-AE3CF96B21AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0D0BBFC-FD62-4D8A-8D35-AE3CF96B21AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0D0BBFC-FD62-4D8A-8D35-AE3CF96B21AE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
